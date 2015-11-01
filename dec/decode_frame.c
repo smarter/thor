@@ -34,11 +34,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 extern int chroma_qp[52];
 
+#if 0
 static int clpf_true(int k, int l, yuv_frame_t *r, yuv_frame_t *o, const deblock_data_t *d, int s, void *stream) {
   return 1;
 }
+#endif
 
-static int clpf_bit(int k, int l, yuv_frame_t *r, yuv_frame_t *o, const deblock_data_t *d, int s, void *stream) {
+static int clpf_bit(int k, int l, yuv_frame_t *r, yuv_frame_t *o, const deblock_data_t *d, int s,
+                    uint8_t qp, double lambda, void *stream) {
   return getbits((stream_t*)stream, 1);
 }
 
@@ -110,15 +113,18 @@ void decode_frame(decoder_info_t *decoder_info, yuv_frame_t* rec_buffer)
     }
   }
 
+  int qpc = chroma_qp[qp];
+
   if (decoder_info->deblocking){
     deblock_frame_y(decoder_info->rec, decoder_info->deblock_data, width, height, qp);
-    int qpc = chroma_qp[qp];
     deblock_frame_uv(decoder_info->rec, decoder_info->deblock_data, width, height, qpc);
   }
 
+  double lambda = -1; // unused
   if (decoder_info->clpf && getbits(stream, 1)){
+    assert(!getbits(stream, 1));
     clpf_frame(decoder_info->rec, 0, decoder_info->deblock_data, stream,
-               getbits(stream, 1) ? clpf_true : clpf_bit);
+               clpf_bit, qp, qpc, lambda);
   }
 
   /* Sliding window operation for reference frame buffer by circular buffer */
