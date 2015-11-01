@@ -33,6 +33,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "common_frame.h"
 #include "enc_kernels.h"
 
+#include "daala_compat.h"
+
 extern int chroma_qp[52];
 const double squared_lambda_QP [52] = {
     0.0382, 0.0485, 0.0615, 0.0781, 0.0990, 0.1257, 0.1595, 0.2023, 0.2567,
@@ -43,23 +45,57 @@ const double squared_lambda_QP [52] = {
     1717.4389, 2179.0763, 2764.7991, 3507.9607, 4450.8797, 5647.2498, 7165.1970
 };
 
-static int clpf_true(int k, int l, yuv_frame_t *r, yuv_frame_t *o, const deblock_data_t *d, int s, void *stream) {
-  return 1;
-}
-
-static int clpf_decision(int k, int l, yuv_frame_t *rec, yuv_frame_t *org, const deblock_data_t *deblock_data, int block_size, void *stream) {
-    int sum0 = 0, sum1 = 0;
+static int dering_decision(int k, int l, yuv_frame_t *rec, yuv_frame_t *org, const deblock_data_t *deblock_data, int block_size, uint8_t qp, double lambda, void *stream) {
+  int skip_stride = 8;
+  unsigned char bskip_y[8*8];
   for (int m=0;m<MAX_BLOCK_SIZE/block_size;m++){
     for (int n=0;n<MAX_BLOCK_SIZE/block_size;n++){
       int xpos = l*MAX_BLOCK_SIZE + n*block_size;
       int ypos = k*MAX_BLOCK_SIZE + m*block_size;
       int index = (ypos/MIN_PB_SIZE)*(rec->width/MIN_PB_SIZE) + (xpos/MIN_PB_SIZE);
-      if (deblock_data[index].cbp.y && deblock_data[index].mode != MODE_BIPRED)
-        (use_simd ? detect_clpf_simd : detect_clpf)(rec->y,org->y,xpos,ypos,rec->width,rec->height,org->stride_y,rec->stride_y,&sum0,&sum1);
+      bskip_y[m*skip_stride + n] =
+          deblock_data[index].mode == MODE_BIPRED || !deblock_data[index].cbp.y;
     }
   }
-  putbits(1, sum1 < sum0, (stream_t*)stream);
-  return sum1 < sum0;
+  int num_sb_hor = rec->width/MAX_BLOCK_SIZE;
+  int num_sb_ver = rec->height/MAX_BLOCK_SIZE;
+  int xpos = l*MAX_BLOCK_SIZE;
+  int ypos = k*MAX_BLOCK_SIZE;
+  uint8_t buf[OD_BSIZE_MAX*OD_BSIZE_MAX];
+  int ln = 6;
+  int xdec = 0;
+  int pli = 0;
+  int dir[OD_DERING_NBLOCKS][OD_DERING_NBLOCKS];
+
+  od_dering(buf, OD_BSIZE_MAX, &rec->y[ypos*rec->stride_y + xpos], rec->stride_y,
+            ln, l, k, num_sb_hor, num_sb_ver, qp, xdec,
+            dir, pli, bskip_y, skip_stride);
+
+
+  int n = 1 << ln;
+  double unfiltered_error = 0;
+  double filtered_error = 0;
+  double filtered_rate = 1;
+  double unfiltered_rate = 1;
+
+  /* Optimize deringing for PSNR. */
+  for (int y = 0; y < n; y++) {
+    for (int x = 0; x < n; x++) {
+      int r;
+      od_coeff p;
+      od_coeff o;
+      r = org->y[(ypos + y)*org->stride_y + (xpos + x)];
+      p = buf[y*OD_BSIZE_MAX + x];
+      filtered_error += (r - p)*(double)(r - p);
+      o = rec->y[(ypos + y)*rec->stride_y + (xpos + x)];
+      unfiltered_error += (r - o)*(double)(r - o);
+    }
+  }
+  int filtered = (filtered_error + (int32_t)(lambda*filtered_rate + 0.5)) <
+                 (unfiltered_error + (int32_t)(lambda*unfiltered_rate + 0.5));
+
+  putbits(1, filtered, (stream_t*)stream);
+  return filtered;
 }
 
 void encode_frame(encoder_info_t *encoder_info)
@@ -147,19 +183,21 @@ void encode_frame(encoder_info_t *encoder_info)
     }
   }
 
+  int qpc = chroma_qp[qp];
+
   if (encoder_info->params->deblocking){
     deblock_frame_y(encoder_info->rec, encoder_info->deblock_data, width, height, qp);
-    int qpc = chroma_qp[qp];
     deblock_frame_uv(encoder_info->rec, encoder_info->deblock_data, width, height, qpc);
   }
 
   int sb_signal = 1;
+  double lambda = frame_info->lambda;
 
   if (encoder_info->params->clpf){
     putbits(1, 1, stream);
     putbits(1, !sb_signal, stream);
     clpf_frame(encoder_info->rec, encoder_info->orig, encoder_info->deblock_data, stream,
-               sb_signal ? clpf_decision : clpf_true);
+               dering_decision, qp, qpc, lambda);
   }
 
   /* Sliding window operation for reference frame buffer by circular buffer */
