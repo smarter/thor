@@ -120,7 +120,7 @@ void decode_frame(decoder_info_t *decoder_info)
   if (decoder_info->clpf && getbits(stream, 1)){
     assert(!getbits(stream, 1));
     clpf_frame(decoder_info->rec, 0, decoder_info->deblock_data, stream,
-               clpf_bit, qp, qpc, lambda);
+               clpf_bit, qp, qpc, lambda, 1000);
   }
 
   /* Sliding window operation for reference frame buffer by circular buffer */

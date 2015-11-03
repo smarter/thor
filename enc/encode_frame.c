@@ -195,7 +195,7 @@ void encode_frame(encoder_info_t *encoder_info)
     putbits(1, 1, stream);
     putbits(1, !sb_signal, stream);
     clpf_frame(encoder_info->rec, encoder_info->orig, encoder_info->deblock_data, stream,
-               dering_decision, qp, qpc, lambda);
+               dering_decision, qp, qpc, lambda, frame_info->frame_num);
   }
 
   /* Sliding window operation for reference frame buffer by circular buffer */

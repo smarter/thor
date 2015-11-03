@@ -485,7 +485,7 @@ void create_reference_frame(yuv_frame_t  *ref,yuv_frame_t  *rec)
 void clpf_frame(yuv_frame_t *rec, yuv_frame_t *org, const deblock_data_t *deblock_data, void *stream,
                 int (*decision)(int, int, yuv_frame_t *, yuv_frame_t *, const deblock_data_t *, int,
                                 uint8_t, double, void *),
-                uint8_t qp, uint8_t qpc, double lambda) {
+                uint8_t qp, uint8_t qpc, double lambda, int frame_num) {
 
   /* Constrained low-pass filter (CLPF) */
   int width = rec->width;
@@ -529,6 +529,7 @@ void clpf_frame(yuv_frame_t *rec, yuv_frame_t *org, const deblock_data_t *debloc
         unsigned char bskip_y[8*8];
         unsigned char bskip_u[8*8];
         unsigned char bskip_v[8*8];
+        int num_skips = 0;
         for (m=0;m<MAX_BLOCK_SIZE/block_size;m++){
           for (n=0;n<MAX_BLOCK_SIZE/block_size;n++){
             xpos = l*MAX_BLOCK_SIZE + n*block_size;
@@ -540,8 +541,11 @@ void clpf_frame(yuv_frame_t *rec, yuv_frame_t *org, const deblock_data_t *debloc
               deblock_data[index].mode == MODE_BIPRED || !deblock_data[index].cbp.u;
             bskip_v[m*skip_stride + n] =
               deblock_data[index].mode == MODE_BIPRED || !deblock_data[index].cbp.v;
+            num_skips += bskip_y[m*skip_stride + n];
           }
         }
+        printf("##[%d] (%d, %d): %d\n", frame_num, l, k, num_skips);
+
         int dir[OD_DERING_NBLOCKS][OD_DERING_NBLOCKS];
         xpos = l*MAX_BLOCK_SIZE;
         ypos = k*MAX_BLOCK_SIZE;
