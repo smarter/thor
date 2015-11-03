@@ -94,8 +94,10 @@ static int dering_decision(int k, int l, yuv_frame_t *rec, yuv_frame_t *org, con
   int filtered = (filtered_error + (int32_t)(lambda*filtered_rate + 0.5)) <
                  (unfiltered_error + (int32_t)(lambda*unfiltered_rate + 0.5));
 
-  putbits(1, filtered, (stream_t*)stream);
-  return filtered;
+  /* putbits(1, filtered, (stream_t*)stream); */
+  /* return filtered; */
+  putbits(1, 0, (stream_t*)stream);
+  return 0;
 }
 
 void encode_frame(encoder_info_t *encoder_info)
