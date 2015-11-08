@@ -493,7 +493,7 @@ int main(int argc, char **argv)
         encoder_info.frame_info.num_intra_modes = 4;
       else
 #if LIMIT_INTRA_MODES
-        encoder_info.frame_info.num_intra_modes = 8;
+        encoder_info.frame_info.num_intra_modes = 1;
 #else
         encoder_info.frame_info.num_intra_modes = MAX_NUM_INTRA_MODES;
 #endif

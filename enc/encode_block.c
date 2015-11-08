@@ -1137,6 +1137,8 @@ int search_intra_prediction_params(uint8_t *org_y,yuv_frame_t *rec,block_pos_t *
     *intra_mode = MODE_DC;
     min_sad = sad;
   }
+#if LIMIT_INTRA_MODES
+#else
   get_hor_pred(left,size,pblock);
   sad = sad_calc(org_y,pblock,size,size,size,size);
   if (sad < min_sad){
@@ -1151,11 +1153,7 @@ int search_intra_prediction_params(uint8_t *org_y,yuv_frame_t *rec,block_pos_t *
     min_sad = sad;
   }
 
-#if LIMIT_INTRA_MODES
-  if (num_intra_modes<8){
-#else
   if (1){
-#endif
     get_planar_pred(left,top,top_left,size,pblock);
     sad = sad_calc(org_y,pblock,size,size,size,size);
     if (sad < min_sad){
@@ -1176,15 +1174,12 @@ int search_intra_prediction_params(uint8_t *org_y,yuv_frame_t *rec,block_pos_t *
     min_sad = sad;
   }
 
-#if LIMIT_INTRA_MODES
-#else
   get_upright_pred(top,size,pblock);
   sad = sad_calc(org_y,pblock,size,size,size,size);
   if (sad < min_sad){
     *intra_mode = MODE_UPRIGHT;
     min_sad = sad;
   }
-#endif
 
   get_upupright_pred(top,size,pblock);
   sad = sad_calc(org_y,pblock,size,size,size,size);
@@ -1213,6 +1208,7 @@ int search_intra_prediction_params(uint8_t *org_y,yuv_frame_t *rec,block_pos_t *
     *intra_mode = MODE_DOWNLEFTLEFT;
     min_sad = sad;
   }
+#endif
   thor_free(pblock);
   return min_sad;
 }
@@ -2328,7 +2324,8 @@ int mode_decision_rdo(encoder_info_t *encoder_info,block_info_t *block_info)
         if (encoder_info->frame_info.num_intra_modes==4 && intra_mode >= 4)
           continue;
 #if LIMIT_INTRA_MODES
-        if (intra_mode == MODE_PLANAR || intra_mode == MODE_UPRIGHT)
+        //if (intra_mode == MODE_PLANAR || intra_mode == MODE_UPRIGHT)
+        if (intra_mode != MODE_DC)
           continue;
 #endif
         pred_data.intra_mode = intra_mode;
